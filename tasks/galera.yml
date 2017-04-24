@@ -2,40 +2,32 @@
 # tasks file for galera
 
 - name: stop mariadb.
-  service:
-    name: "{{ mariadb_daemon }}"
-    state: stopped
+  service: name={{ mariadb_daemon }} state=stopped
 
 - name: Adding Galera Configuration.
-  template:
-    src: galera.cnf.j2
-    dest: "{{ mariadb_config_dir }}/galera.cnf"
-    owner: root
-    group: root
-    mode: 0644
+  template: src=galera.cnf.j2 dest={{ mariadb_config_dir }}/galera.cnf owner=root group=root mode=0644
+
+- name: Add SELinux policy
+  copy: src=mariadb-server-galera.pp dest={{ mariadb_config_dir }}/mariadb-server-galera.pp owner=root group=root mode=0644
+
+- name: Install SELinux policy
+  shell: semodule -i {{ mariadb_config_dir }}/mariadb-server-galera.pp
+
+- name: Add Galera firewall rules
+  iptables:
+    action: insert
+    destination_port: "{{ item }}"
+    chain: INPUT
+    jump: ACCEPT
+    protocol: tcp
+  with_items:
+    - 4567
+    - 4444
 
 - name: Bootstraping the Cluster.
-  shell: |
-    #/usr/libexec/mysqld --wsrep-new-cluster --user={{ mariadb_daemon_user }} &
-    /bin/sh /usr/bin/mysqld_safe --datadir={{ galera_mysql_datadir }} --pid-file=/var/run/{{ mariadb_daemon }}/{{ mariadb_daemon }}.pid --wsrep-new-cluster --user={{ mariadb_daemon_user }} &
-  when: inventory_hostname == "{{ galera_bootstrap_node }}"
-
-- name: Start the other nodes.
-  service:
-    name: "{{ mariadb_daemon }}"
-    state: restarted
-  when: inventory_hostname != "{{ galera_bootstrap_node }}"
-
-- name: Wait for the cluster running and bootstrapped.
-  command: mysql --silent --skip-column-names -e 'SHOW STATUS LIKE "wsrep_cluster_size"'
-  register: galera_check_wait
-  until: galera_check_wait | success
-  run_once: True
+  shell: /usr/sbin/mysqld --wsrep-new-cluster --user={{ mariadb_daemon_user }} &
+  when: ansible_hostname == "{{ galera_bootstrap_node }}" or ansible_{{ galera_mgmt_nic }}.ipv4.address == "{{ galera_bootstrap_node }}"
 
 - name: Finalizing the Installation.
-  shell: |
-    pkill -9 mysqld
-    systemctl restart "{{ mariadb_daemon }}"
-  when:
-    - galera_check_wait.stdout | search("3")
-    - inventory_hostname == "{{ galera_bootstrap_node }}"
+  service: name={{ mariadb_daemon }} state=restarted
+  when: ansible_hostname != "{{ galera_bootstrap_node }}" and ansible_{{ galera_mgmt_nic }}.ipv4.address != "{{ galera_bootstrap_node }}"

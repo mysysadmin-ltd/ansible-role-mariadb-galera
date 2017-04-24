@@ -1,19 +1,36 @@
 ---
 # tasks file secure
 
-- name: Get list of hosts for the root user.
-  command: mysql -NBe 'SELECT Host FROM mysql.user WHERE User = "root" ORDER BY (Host="localhost") ASC'
-  register: mysql_root_hosts
-  changed_when: false
+#- name: Get list of hosts for the root user.
+#  command: mysql -NBe 'SELECT Host FROM mysql.user WHERE User = "root" ORDER BY (Host="localhost") ASC'
+#  register: mysql_root_hosts
+#  changed_when: false
 
-# 'localhost' needs to be last for idempotency.
-- name: Update MySQL root password for localhost root account.
-  mysql_user:
-    name: "root"
-    host: "{{ item }}"
-    password: "{{ mariadb_root_password }}"
-  with_items:
-    - "{{ mysql_root_hosts.stdout_lines }}"
+## 'localhost' needs to be last for idempotency.
+#- name: Update MySQL root password for localhost root account.
+#  mysql_user:
+#    name: "root"
+#    host: "{{ item }}"
+#    password: "{{ mariadb_root_password }}"
+#  with_items: "{{ mysql_root_hosts.stdout_lines }}"
+
+# Note: We do not use mysql_user for this operation, as it doesn't always update
+# the root password correctly. See: https://goo.gl/MSOejW
+# Set root password for MySQL >= 5.7.x.
+#- name: Update MySQL root password for localhost root account (5.7.x).
+#  shell: >
+#    mysql -u root -NBe
+#    'SET PASSWORD FOR root@"{{ item }}" = PASSWORD("{{ mariadb_root_password }}");'
+#  with_items: "{{ mysql_root_hosts.stdout_lines|default([]) }}"
+
+- name: mysql_secure_installation
+  shell: >
+    mysql -u root -NBe
+    "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+    DELETE FROM mysql.user WHERE User='';
+    DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%';
+    UPDATE mysql.user SET Password=PASSWORD(\"{{ mariadb_root_password }}\") WHERE User='root';
+    FLUSH PRIVILEGES;"
 
 # Has to be after the root password assignment, for idempotency.
 - name: Copy .my.cnf file with root password credentials.
@@ -24,20 +41,17 @@
     group: root
     mode: 0600
 
-- name: Get list of hosts for the anonymous user.
-  command: mysql -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
-  register: mysql_anonymous_hosts
-  changed_when: false
-
-- name: Remove anonymous MySQL users.
-  mysql_user:
-     name: ""
-     host: "{{ item }}"
-     state: absent
-  with_items:
-    - "{{ mysql_anonymous_hosts.stdout_lines}}"
-
-- name: Remove MySQL test database.
-  mysql_db:
-    name: "test"
-    state: absent
+#- name: Get list of hosts for the anonymous user.
+#  command: mysql -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
+#  register: mysql_anonymous_hosts
+#  changed_when: false
+#
+#- name: Remove anonymous MySQL users.
+#  mysql_user:
+#     name: ""
+#     host: "{{ item }}"
+#     state: absent
+#  with_items: "{{ mysql_anonymous_hosts.stdout_lines|default([]) }}"
+#
+#- name: Remove MySQL test database.
+#  mysql_db: "name='test' state=absent"

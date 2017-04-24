@@ -3,11 +3,9 @@
 
 - name: Ensure MariaDB users are present.
   mysql_user:
-    name: "{{ item.name }}"
-    host: "{{ item.host | default('localhost') }}"
-    password: "{{ item.password }}"
-    priv: "{{ item.priv | default('*.*:USAGE') }}"
+    name: "{{ mariadb_name }}"
+    host: "{{ mariadb_host | default('localhost') }}"
+    password: "{{ mariadb_password }}"
+    priv: "{{ mariadb_priv | default('*.*:USAGE') }}"
     state: present
-  with_items: 
-    - "{{ mariadb_users }}"
   run_once: True

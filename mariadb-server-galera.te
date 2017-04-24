@@ -1,0 +1,33 @@
+
+module mariadb-server-galera 1.0;
+
+require {
+    type mysqld_safe_t;
+    type mysqld_home_t;
+    type mysqld_t;
+    type rsync_exec_t;
+    type anon_inodefs_t;
+    type proc_net_t;
+    type kerberos_port_t;
+    class capability { setgid setuid };
+    class file { read execute execute_no_trans getattr open };
+    class tcp_socket { name_bind name_connect };
+    class process { setpgid siginh rlimitinh noatsecure };
+}
+
+#============= mysqld_safe_t ==============
+allow mysqld_safe_t mysqld_home_t:file getattr;
+allow mysqld_safe_t self:capability setgid;
+allow mysqld_safe_t self:capability setuid;
+
+#============= mysqld_t ==============
+allow mysqld_t mysqld_home_t:file getattr;
+
+# allow mysqld to run rsyncd
+allow mysqld_t self:process setpgid;
+allow mysqld_t rsync_exec_t:file { read execute execute_no_trans getattr open };
+allow mysqld_t anon_inodefs_t:file getattr;
+allow mysqld_t proc_net_t:file { read open };
+
+# allow rsyncd to listen on port 4444
+allow mysqld_t kerberos_port_t:tcp_socket { name_bind name_connect };

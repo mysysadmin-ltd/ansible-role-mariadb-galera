@@ -2,7 +2,4 @@
 # tasks file for config
 
 - name: Ensure MariaDB is started and enabled on boot.
-  service:
-    name: "{{ mariadb_daemon }}"
-    state: started
-    enabled: yes
+  service: "name={{ mariadb_daemon }} state=started enabled=yes"
